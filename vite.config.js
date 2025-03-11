@@ -1,17 +1,10 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: './', // 🔥 Esto hace que los archivos se sirvan con rutas relativas
+  base: '/API/', // Cambia "TU_REPO" por el nombre de tu repositorio en GitHub
   server: {
     port: 3000,
     open: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false,
-      },
-    },
   },
   build: {
     outDir: 'dist', // Guarda los archivos en `dist/`

@@ -1,12 +1,14 @@
 {
   "name": "client",
   "private": true,
+  "homepage": "https://erveygarcia.github.io/API", 
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "npx tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
     "typescript": "^5.4.5",
