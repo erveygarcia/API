@@ -10,58 +10,59 @@ const weatherIcon = document.getElementById('weather-img') as HTMLImageElement;
 const tempEl = document.getElementById('temp') as HTMLParagraphElement;
 const windEl = document.getElementById('wind') as HTMLParagraphElement;
 const humidityEl = document.getElementById('humidity') as HTMLParagraphElement;
+const forecastContainer = document.getElementById('forecast') as HTMLDivElement | null;
+
+const API_KEY = "87e00899d72806c24428b5e3e8d1069d"; // Tu API Key
+const BASE_URL = "https://api.openweathermap.org/data/2.5";
 
 /*
 API Calls
 */
 const fetchWeather = async (cityName: string) => {
   try {
-    const response = await fetch('/api/weather/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ city: cityName }),
-    });
-
+    const response = await fetch(`${BASE_URL}/weather?q=${cityName}&appid=${API_KEY}&units=metric`);
     if (!response.ok) {
       throw new Error(`Error fetching weather: ${response.statusText}`);
     }
-
     const weatherData = await response.json();
     console.log('weatherData:', weatherData);
-
-    if (!weatherData.current || !weatherData.forecast) {
-      console.error("Error: Respuesta del servidor inválida", weatherData);
-      throw new Error("Invalid weather data from server");
-    }
-
-    renderCurrentWeather(weatherData.current);
-    renderForecast(weatherData.forecast);
-    await getAndRenderHistory();
+    renderCurrentWeather(weatherData);
+    fetchForecast(cityName);
   } catch (error) {
     console.error("Error al obtener el clima:", error);
   }
 };
 
-const fetchSearchHistory = async (): Promise<{ name: string; id: string }[]> => {
+const fetchForecast = async (cityName: string) => {
   try {
-    console.log("📥 Fetching search history...");
-
-    const response = await fetch('/api/weather/history', {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
-
+    const response = await fetch(`${BASE_URL}/forecast?q=${cityName}&appid=${API_KEY}&units=metric`);
     if (!response.ok) {
-      throw new Error(`Error fetching search history: ${response.statusText}`);
+      throw new Error(`Error fetching forecast: ${response.statusText}`);
     }
+    const forecastData = await response.json();
+    console.log('forecastData:', forecastData);
+    renderForecast(forecastData.list);
+  } catch (error) {
+    console.error("Error al obtener el pronóstico:", error);
+  }
+};
 
-    const data = await response.json();
-    console.log("🔎 Search History Data received in frontend:", data);
-
-    return data;
+const fetchSearchHistory = async (): Promise<string[]> => {
+  try {
+    console.log("📥 Fetching search history from localStorage...");
+    const storedHistory = localStorage.getItem("searchHistory");
+    return storedHistory ? JSON.parse(storedHistory) : [];
   } catch (error) {
     console.error("Error fetching search history:", error);
     return [];
+  }
+};
+
+const updateSearchHistory = (cityName: string) => {
+  let history = JSON.parse(localStorage.getItem("searchHistory") || "[]");
+  if (!history.includes(cityName)) {
+    history.push(cityName);
+    localStorage.setItem("searchHistory", JSON.stringify(history));
   }
 };
 
@@ -70,157 +71,65 @@ Render Functions
 */
 const renderCurrentWeather = (currentWeather: any): void => {
   console.log("Rendering current weather:", currentWeather);
-
-  const { city, date, icon, description, temperature, windSpeed, humidity } = currentWeather;
-
-  heading.innerHTML = `<strong>${city} (${date})</strong>`;
-  const iconUrl = `https://openweathermap.org/img/wn/${icon}@2x.png`;
-
-  console.log("Icon URL (current weather):", iconUrl);
-
-  weatherIcon.setAttribute('src', iconUrl);
-  weatherIcon.setAttribute('alt', description);
+  const { name, weather, main, wind } = currentWeather;
+  heading.innerHTML = `<strong>${name}</strong>`;
+  weatherIcon.setAttribute('src', `https://openweathermap.org/img/wn/${weather[0].icon}@2x.png`);
+  weatherIcon.setAttribute('alt', weather[0].description);
   weatherIcon.setAttribute('class', 'weather-img');
-
-  tempEl.textContent = `Temp: ${temperature}°C`;
-  windEl.textContent = `Wind: ${windSpeed} MPH`;
-  humidityEl.textContent = `Humidity: ${humidity} %`;
+  tempEl.textContent = `Temp: ${main.temp}°C`;
+  windEl.textContent = `Wind: ${wind.speed} MPH`;
+  humidityEl.textContent = `Humidity: ${main.humidity} %`;
 };
 
 const renderForecast = (forecast: any[]): void => {
-  console.log("Forecast data received:", forecast);
-
-  const forecastContainer = document.getElementById('forecast') as HTMLDivElement | null;
-  if (!forecastContainer) {
-    console.error("❌ Error: #forecast container not found in DOM");
-    return;
-  }
-
-  forecastContainer.innerHTML = '';
-
-  const title = document.createElement("h3");
-  title.textContent = "5-Day Forecast";
-  title.classList.add("forecast-title");
-
-  forecastContainer.appendChild(title);
-
+  if (!forecastContainer) return;
+  forecastContainer.innerHTML = '<h3 class="forecast-title">5-Day Forecast</h3>';
+  
   const forecastWrapper = document.createElement("div");
   forecastWrapper.classList.add("forecast-wrapper");
-
-  forecast.forEach((day) => {
-    const forecastCard = renderForecastCard(day);
-    if (forecastCard) {
+  
+  forecast.forEach((day, index) => {
+    if (index % 8 === 0) {
+      const forecastCard = document.createElement("div");
+      forecastCard.classList.add("forecast-card");
+      forecastCard.innerHTML = `
+        <h5>${new Date(day.dt_txt).toLocaleDateString()}</h5>
+        <img src="https://openweathermap.org/img/wn/${day.weather[0].icon}@2x.png" alt="${day.weather[0].description}" class="weather-icon">
+        <p>Temp: ${day.main.temp}°C</p>
+        <p>Wind: ${day.wind.speed} MPH</p>
+        <p>Humidity: ${day.main.humidity} %</p>
+      `;
       forecastWrapper.appendChild(forecastCard);
     }
   });
-
   forecastContainer.appendChild(forecastWrapper);
 };
 
-const renderForecastCard = (forecast: any): HTMLDivElement => {
-  console.log("Rendering forecast card:", forecast);
-
-  if (!forecast || !forecast.date || !forecast.temperature || !forecast.icon) {
-    console.error('Invalid forecast data:', forecast);
-    return document.createElement("div");
-  }
-
-  const { date, icon, description, temperature, windSpeed, humidity } = forecast;
-
-  const col = document.createElement('div');
-  const card = document.createElement('div');
-  const cardBody = document.createElement('div');
-  const cardTitle = document.createElement('h5');
-  const weatherIcon = document.createElement('img');
-  const tempEl = document.createElement('p');
-  const windEl = document.createElement('p');
-  const humidityEl = document.createElement('p');
-
-  col.append(card);
-  card.append(cardBody);
-  cardBody.append(cardTitle, weatherIcon, tempEl, windEl, humidityEl);
-
-  col.classList.add('col-auto');
-  card.classList.add('forecast-card', 'card', 'text-white', 'bg-primary', 'h-100');
-  cardBody.classList.add('card-body', 'p-2', 'text-center');
-  cardTitle.classList.add('card-title');
-  weatherIcon.classList.add('weather-icon');
-  tempEl.classList.add('card-text');
-  windEl.classList.add('card-text');
-  humidityEl.classList.add('card-text');
-
-  cardTitle.innerHTML = `<strong>${date}</strong><br>${description}`;
-  weatherIcon.setAttribute("src", `https://openweathermap.org/img/wn/${icon}@2x.png`);
-  weatherIcon.setAttribute("alt", description);
-
-  tempEl.textContent = `Temp: ${temperature} °F`;
-  windEl.textContent = `Wind: ${windSpeed} MPH`;
-  humidityEl.textContent = `Humidity: ${humidity} %`;
-
-  return col;
-};
-
-/*
-Renderizar historial de búsqueda
-*/
 const renderSearchHistory = async () => {
-  if (!searchHistoryContainer) {
-    console.error("❌ Error: #history container not found in DOM");
-    return;
-  }
-
-  searchHistoryContainer.style.display = "block"; // Asegurar que sea visible
-  searchHistoryContainer.innerHTML = ''; // Limpia antes de agregar
-
+  if (!searchHistoryContainer) return;
+  searchHistoryContainer.innerHTML = '';
   const historyList = await fetchSearchHistory();
-  console.log("🔎 Search History Data received in frontend:", historyList);
-
-  if (historyList.length === 0) {
-    searchHistoryContainer.innerHTML = '<p class="text-center">No Previous Search History</p>';
-    return;
-  }
-
-  historyList.forEach(({ name }) => {
-    console.log(`✅ Adding to search history: ${name}`);
-
+  historyList.forEach(name => {
     const historyItem = document.createElement('button');
     historyItem.textContent = name;
     historyItem.classList.add('history-btn');
-
     historyItem.addEventListener('click', () => fetchWeather(name));
     searchHistoryContainer.appendChild(historyItem);
   });
-
-  console.log("✅ Search history rendered successfully!");
 };
 
-/*
-Función para renderizar historial
-*/
 const getAndRenderHistory = async () => {
-  console.log("🔄 Ejecutando getAndRenderHistory...");
   await renderSearchHistory();
 };
 
-/*
-Event Handlers
-*/
 const handleSearchFormSubmit = async (event: Event) => {
   event.preventDefault();
   if (!searchInput.value.trim()) return;
-
   await fetchWeather(searchInput.value.trim());
+  updateSearchHistory(searchInput.value.trim());
   await getAndRenderHistory();
-
   searchInput.value = '';
 };
 
-/*
-Asegurar que el historial se renderiza al cargar la página
-*/
-document.addEventListener("DOMContentLoaded", () => {
-  console.log("✅ DOM cargado. Ejecutando getAndRenderHistory()");
-  getAndRenderHistory();
-});
-
+document.addEventListener("DOMContentLoaded", getAndRenderHistory);
 searchForm.addEventListener('submit', handleSearchFormSubmit);
